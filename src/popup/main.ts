@@ -1,5 +1,5 @@
 import '../styles.css';
-import { trashSvg } from '../shared/icons';
+import { gearSvg, refreshSvg, trashSvg } from '../shared/icons';
 import { PageState, sendMessage, sendToTab } from '../shared/messages';
 import { applyStatusUpdates, getHistory } from '../shared/storage';
 import { clear, el } from '../shared/dom';
@@ -14,17 +14,27 @@ let setRefreshSpinning: ((on: boolean) => void) | null = null;
 let refreshing = false;
 
 function header(): HTMLElement {
-    const refreshGlyph = el('span', { class: 'inline-block', text: '↻' });
-    setRefreshSpinning = (on) => refreshGlyph.classList.toggle('animate-spin', on);
-    const refreshBtn = el(
-        'button',
-        {
-            class: 'w-10 h-10 rounded-md flex items-center justify-center text-2xl text-zinc-300 hover:bg-white/10 hover:text-white transition',
-            title: 'Refresh status',
-            onClick: () => void runRefresh(),
-        },
-        refreshGlyph,
-    );
+    const refreshGlyph = refreshSvg(20);
+    // Spin continuously while in flight, but always land on a full 360° boundary:
+    // a stop request waits for the next `animationiteration` so even an instant
+    // refresh still shows one complete spin instead of stopping mid-rotation.
+    let spinning = false;
+    setRefreshSpinning = (on) => {
+        if (on) {
+            spinning = true;
+            refreshGlyph.classList.add('animate-spin');
+            return;
+        }
+        spinning = false;
+        if (!refreshGlyph.classList.contains('animate-spin')) return;
+        refreshGlyph.addEventListener(
+            'animationiteration',
+            () => {
+                if (!spinning) refreshGlyph.classList.remove('animate-spin');
+            },
+            { once: true },
+        );
+    };
     return el(
         'header',
         { class: 'flex items-center justify-between px-4 py-3 border-b border-white/10' },
@@ -37,8 +47,8 @@ function header(): HTMLElement {
         el(
             'div',
             { class: 'flex items-center gap-1' },
-            refreshBtn,
-            iconButton('⚙', 'Settings', () => chrome.runtime.openOptionsPage()),
+            iconButton(refreshGlyph, 'Refresh status', () => void runRefresh()),
+            iconButton(gearSvg(20), 'Settings', () => chrome.runtime.openOptionsPage()),
         ),
     );
 }
@@ -56,13 +66,16 @@ async function runRefresh(): Promise<void> {
     }
 }
 
-function iconButton(glyph: string, title: string, onClick: () => void): HTMLElement {
-    return el('button', {
-        class: 'w-10 h-10 rounded-md flex items-center justify-center text-2xl text-zinc-300 hover:bg-white/10 hover:text-white transition',
-        title,
-        text: glyph,
-        onClick,
-    });
+function iconButton(icon: Node, title: string, onClick: () => void): HTMLElement {
+    return el(
+        'button',
+        {
+            class: 'w-10 h-10 rounded-md flex items-center justify-center text-zinc-300 hover:bg-white/10 hover:text-white transition',
+            title,
+            onClick,
+        },
+        icon,
+    );
 }
 
 /** Status as a small coloured tag for the metadata line. */
@@ -83,7 +96,7 @@ function measureRemoveLabelWidth(): number {
         style: 'position:absolute;visibility:hidden;white-space:nowrap;font-size:11px;font-weight:600',
     });
     document.body.append(probe);
-    for (const t of ['Remove', 'Confirm?']) {
+    for (const t of ['Delete', 'Confirm?']) {
         probe.textContent = t;
         removeLabelWidth = Math.max(removeLabelWidth, probe.offsetWidth);
     }
@@ -101,12 +114,12 @@ function removeControl(entry: HistoryEntry): HTMLElement {
     let counter = REMOVE_CLICKS;
     let busy = false;
 
-    const label = () => (counter === REMOVE_CLICKS ? 'Remove' : 'Confirm?');
+    const label = () => (counter === REMOVE_CLICKS ? 'Delete' : 'Confirm?');
 
     const render = (): void => {
         clear(slot);
         if (busy) {
-            slot.append(el('span', { class: 'text-[11px] text-zinc-400', text: 'Removing…' }));
+            slot.append(el('span', { class: 'text-[11px] text-zinc-400', text: 'Deleting…' }));
             return;
         }
         slot.append(
@@ -114,7 +127,7 @@ function removeControl(entry: HistoryEntry): HTMLElement {
                 'button',
                 {
                     class: 'h-7 px-2.5 gap-1.5 rounded-md flex items-center bg-red-600 hover:bg-red-500 text-white text-[11px] font-semibold transition',
-                    title: 'Remove from library',
+                    title: 'Delete from library',
                     onMouseleave: reset,
                     onClick: step,
                 },
@@ -138,7 +151,7 @@ function removeControl(entry: HistoryEntry): HTMLElement {
     const doRemove = async (): Promise<void> => {
         busy = true;
         render();
-        const res = await sendMessage({ type: 'REMOVE', app: entry.app, arrId: entry.arrId });
+        const res = await sendMessage({ type: 'REMOVE', app: entry.app, arrId: entry.arrId, key: entry.key });
         if (res.ok) {
             const li = slot.closest('li');
             if (li instanceof HTMLElement) {

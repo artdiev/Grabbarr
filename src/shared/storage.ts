@@ -23,6 +23,7 @@ function mergeConfig(stored: Partial<Config> | undefined): Config {
         sonarr: { ...DEFAULT_CONFIG.sonarr, ...stored?.sonarr },
         siteEnabled: { ...DEFAULT_CONFIG.siteEnabled, ...stored?.siteEnabled },
         overrides: { ...stored?.overrides },
+        tmdbApiKey: stored?.tmdbApiKey ?? DEFAULT_CONFIG.tmdbApiKey,
     };
 }
 

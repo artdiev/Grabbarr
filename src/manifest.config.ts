@@ -12,6 +12,10 @@ const SITE_MATCHES = [
     'https://www.kinopoisk.ru/series/*',
 ];
 
+// Distinct origins for the supported sites (deduped — Chromium/Edge reject a
+// manifest with duplicate web_accessible_resources match patterns).
+const SITE_ORIGINS = [...new Set(SITE_MATCHES.map((m) => new URL(m).origin + '/*'))];
+
 export default defineManifest({
     manifest_version: 3,
     name: 'Grabbarr',
@@ -24,6 +28,8 @@ export default defineManifest({
         128: 'icons/icon128.png',
     },
     permissions: ['storage', 'activeTab'],
+    // Fixed host for the optional TMDb resolver (no runtime permission prompt needed).
+    host_permissions: ['https://api.themoviedb.org/*'],
     // Self-hosted Radarr/Sonarr live at arbitrary user-supplied origins, so we
     // request host access at runtime (chrome.permissions.request) for the exact
     // URL the user configures, rather than baking a broad grant into install.
@@ -54,7 +60,7 @@ export default defineManifest({
     web_accessible_resources: [
         {
             resources: ['icons/icon32.png'],
-            matches: SITE_MATCHES.map((m) => new URL(m).origin + '/*'),
+            matches: SITE_ORIGINS,
         },
     ],
 });

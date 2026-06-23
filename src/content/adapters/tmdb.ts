@@ -14,6 +14,7 @@ export const tmdbAdapter: SiteAdapter = {
         const m = location.href.match(/themoviedb\.org\/(movie|tv)\/(\d+)/);
         if (!m) return null;
         const mediaType = m[1] === 'tv' ? 'tv' : 'movie';
+        const tmdbId = Number(m[2]); // the TMDb id is right in the URL — the stable id
         const titleEl =
             document.querySelector('section.header h2 a') ??
             document.querySelector('.title h2 a') ??
@@ -25,6 +26,6 @@ export const tmdbAdapter: SiteAdapter = {
             ?.getAttribute('href');
         const imdbId = imdbHref?.match(/(tt\d+)/)?.[1];
         const yearText = document.querySelector('.release_date, span.tag.release_date')?.textContent;
-        return { site: 'tmdb', mediaType, imdbId, title, year: parseYear(yearText) };
+        return { site: 'tmdb', mediaType, imdbId, tmdbId, title, year: parseYear(yearText) };
     },
 };

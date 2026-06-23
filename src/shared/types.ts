@@ -28,7 +28,8 @@ export interface MediaContext {
     site: SiteId;
     mediaType: MediaType;
     imdbId?: string; // tt-prefixed when the page exposes it
-    title: string;
+    tmdbId?: number; // numeric TMDb id when the page exposes it (e.g. TMDb URL)
+    title: string; // prefer the original-language title for matching
     year?: number;
 }
 
@@ -59,6 +60,8 @@ export interface Config {
     sonarr: AppConfig;
     siteEnabled: Record<SiteId, boolean>;
     overrides: SiteOverrides;
+    /** Optional TMDb API key — improves matching when a page exposes no IMDb/TMDb id. */
+    tmdbApiKey: string;
 }
 
 export const DEFAULT_CONFIG: Config = {
@@ -66,7 +69,16 @@ export const DEFAULT_CONFIG: Config = {
     sonarr: { url: '', apiKey: '' },
     siteEnabled: { imdb: true, tmdb: true, rt: true, kinopoisk: true },
     overrides: {},
+    tmdbApiKey: '',
 };
+
+/** One season of a TV series, as shown in the on-page season menu. */
+export interface SeasonInfo {
+    seasonNumber: number; // 0 = Specials
+    monitored: boolean; // false when the show isn't added to Sonarr yet
+    episodeCount?: number; // aired episodes (when known)
+    episodeFileCount?: number; // downloaded (only when the series is in the library)
+}
 
 export type ItemStatus =
     | 'added' // accepted by *arr, no download info yet

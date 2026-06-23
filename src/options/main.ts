@@ -273,6 +273,36 @@ function overridesSection(): HTMLElement | null {
     );
 }
 
+function matchingSection(): HTMLElement {
+    const input = el('input', {
+        class: inputCls,
+        type: 'password',
+        placeholder: 'TMDb API key (optional)',
+        value: config.tmdbApiKey,
+        oninput: (e: Event) => (config.tmdbApiKey = (e.target as HTMLInputElement).value.trim()),
+    });
+    const logo = el('img', {
+        src: chrome.runtime.getURL('tmdb.svg'),
+        alt: 'TMDb',
+        class: 'h-5 w-auto shrink-0',
+    });
+    return el(
+        'section',
+        { class: 'rounded-xl border border-white/10 bg-white/[0.02] p-5 space-y-3' },
+        el(
+            'div',
+            { class: 'flex items-center gap-2' },
+            el('h2', { class: 'text-base font-semibold', text: 'Better matching (optional)' }),
+            logo,
+        ),
+        el('p', {
+            class: 'text-xs text-zinc-500',
+            text: 'A TMDb API key improves matching when a page exposes no IMDb/TMDb id (e.g. Kinopoisk). Leave blank to match by IMDb/TMDb id or title.',
+        }),
+        field('TMDb API key', input),
+    );
+}
+
 function render(): void {
     clear(root);
     root.append(
@@ -282,6 +312,7 @@ function render(): void {
             el('h1', { class: 'text-xl font-bold', text: 'Grabbarr settings' }),
             ...APPS.map((a) => appSection(a.app, a.label, a.kind)),
             sitesSection(),
+            matchingSection(),
             overridesSection(),
             saveBar(),
         ),

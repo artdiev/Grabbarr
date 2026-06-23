@@ -1,6 +1,14 @@
 // Typed message contracts between content/popup/options and the background worker.
 
-import type { AppKind, ArrChoices, HistoryEntry, ItemStatus, MediaContext, SiteId } from './types';
+import type {
+    AppKind,
+    ArrChoices,
+    HistoryEntry,
+    ItemStatus,
+    MediaContext,
+    SeasonInfo,
+    SiteId,
+} from './types';
 
 export interface GrabMessage {
     type: 'GRAB';
@@ -44,6 +52,8 @@ export interface CheckStatusResult {
     present: boolean; // already exists in the library
     status?: ItemStatus;
     arrId?: number;
+    key?: string; // canonical history key for this item (so the button can remove it)
+    seasons?: SeasonInfo[]; // TV only — the show's season list (for the season menu)
 }
 
 /** Remove an item from its *arr app (toggle-off / undo an accidental grab). */
@@ -51,9 +61,25 @@ export interface RemoveMessage {
     type: 'REMOVE';
     app: AppKind;
     arrId: number;
+    key: string; // canonical history key to prune (identity is the item, not the arrId)
 }
 export interface RemoveResult {
     ok: boolean;
+    error?: string;
+}
+
+/** Request a TV season (or the whole series) — add or monitor + search in Sonarr. */
+export interface RequestSeasonMessage {
+    type: 'REQUEST_SEASON';
+    media: MediaContext;
+    arrId?: number; // set when the series is already in the library
+    season: number | 'all';
+}
+export interface RequestSeasonResult {
+    ok: boolean;
+    needsConfig?: AppKind;
+    entry?: HistoryEntry;
+    seasons?: SeasonInfo[]; // refreshed season state after the request
     error?: string;
 }
 
@@ -62,7 +88,8 @@ export type Message =
     | TestConnMessage
     | RefreshStatusMessage
     | CheckStatusMessage
-    | RemoveMessage;
+    | RemoveMessage
+    | RequestSeasonMessage;
 
 /** Narrow helper so the background router can switch on `msg.type` safely. */
 export type ResultFor<M extends Message> = M extends GrabMessage
@@ -75,7 +102,9 @@ export type ResultFor<M extends Message> = M extends GrabMessage
           ? CheckStatusResult
           : M extends RemoveMessage
             ? RemoveResult
-            : never;
+            : M extends RequestSeasonMessage
+              ? RequestSeasonResult
+              : never;
 
 export function sendMessage<M extends Message>(msg: M): Promise<ResultFor<M>> {
     return chrome.runtime.sendMessage(msg) as Promise<ResultFor<M>>;

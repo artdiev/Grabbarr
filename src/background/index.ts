@@ -6,12 +6,22 @@ import {
     Message,
     RefreshStatusResult,
     RemoveResult,
+    RequestSeasonResult,
     TestConnResult,
 } from '../shared/messages';
 import { addHistoryEntry, getConfig, removeHistoryEntry } from '../shared/storage';
 import { APP_FOR, AppKind, HistoryEntry, ItemStatus, MediaContext } from '../shared/types';
-import { getChoices, getMovieStatus, getSeriesStatus, ping, removeMovie, removeSeries } from './arr-client';
-import { findExisting, resolveAndAdd } from './resolver';
+import {
+    ArrError,
+    getChoices,
+    getMovieStatus,
+    getSeriesStatus,
+    ping,
+    removeMovie,
+    removeSeries,
+    seriesStatusFrom,
+} from './arr-client';
+import { findExisting, inspectTv, resolveAndAdd, resolveAndRequestSeason } from './resolver';
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
     if (reason === 'install') chrome.runtime.openOptionsPage();
@@ -34,20 +44,57 @@ async function handle(msg: Message): Promise<unknown> {
         case 'CHECK_STATUS':
             return handleCheck(msg.media);
         case 'REMOVE':
-            return handleRemove(msg.app, msg.arrId);
+            return handleRemove(msg.app, msg.arrId, msg.key);
+        case 'REQUEST_SEASON':
+            return handleRequestSeason(msg.media, msg.season, msg.arrId);
     }
 }
 
-async function handleRemove(app: AppKind, arrId: number): Promise<RemoveResult> {
+async function handleRequestSeason(
+    media: MediaContext,
+    season: number | 'all',
+    arrId?: number,
+): Promise<RequestSeasonResult> {
+    const config = await getConfig();
+    const app: AppKind = APP_FOR[media.mediaType]; // 'sonarr' for TV
+    const cfg = config[app];
+    if (!cfg.url || !cfg.apiKey) {
+        chrome.runtime.openOptionsPage();
+        return { ok: false, needsConfig: app };
+    }
+    try {
+        const { added, seasons, key } = await resolveAndRequestSeason(
+            cfg,
+            media,
+            season,
+            config.tmdbApiKey,
+            arrId,
+        );
+        const entry = buildEntry(key, app, added, media);
+        await addHistoryEntry(entry);
+        return { ok: true, entry, seasons };
+    } catch (e) {
+        return { ok: false, error: (e as Error).message };
+    }
+}
+
+async function handleRemove(app: AppKind, arrId: number, key: string): Promise<RemoveResult> {
     const config = await getConfig();
     const cfg = config[app];
     if (!cfg.url || !cfg.apiKey) return { ok: false, error: 'Not configured' };
     try {
         if (app === 'radarr') await removeMovie(cfg, arrId, true);
         else await removeSeries(cfg, arrId, true);
-        await removeHistoryEntry(`${app}:${arrId}`);
+        await removeHistoryEntry(key);
         return { ok: true };
     } catch (e) {
+        // If the item is already gone from *arr (e.g. a duplicate/stale history row,
+        // or removed out-of-band), treat it as removed and still prune the row so it
+        // can't dangle un-deletable. Only a 404 means "not there"; other errors are real.
+        if (e instanceof ArrError && e.status === 404) {
+            await removeHistoryEntry(key);
+            return { ok: true };
+        }
         return { ok: false, error: (e as Error).message };
     }
 }
@@ -58,11 +105,28 @@ async function handleCheck(media: MediaContext): Promise<CheckStatusResult> {
     const cfg = config[app];
     if (!cfg.url || !cfg.apiKey) return { configured: false, present: false };
     try {
-        const arrId = await findExisting(cfg, media.mediaType, media);
-        if (!arrId) return { configured: true, present: false };
-        const status =
-            app === 'radarr' ? await getMovieStatus(cfg, arrId) : await getSeriesStatus(cfg, arrId);
-        return { configured: true, present: true, arrId, status };
+        if (media.mediaType === 'tv') {
+            // One lookup yields both presence and the season list for the menu.
+            const { arrId, key, seasons, series } = await inspectTv(cfg, media, config.tmdbApiKey);
+            if (!arrId || !series) return { configured: true, present: false, key, seasons };
+            return {
+                configured: true,
+                present: true,
+                arrId,
+                key,
+                status: await seriesStatusFrom(cfg, series),
+                seasons,
+            };
+        }
+        const found = await findExisting(cfg, media.mediaType, media, config.tmdbApiKey);
+        if (!found) return { configured: true, present: false };
+        return {
+            configured: true,
+            present: true,
+            arrId: found.arrId,
+            key: found.key,
+            status: await getMovieStatus(cfg, found.arrId),
+        };
     } catch {
         return { configured: true, present: false };
     }
@@ -77,24 +141,34 @@ async function handleGrab(media: MediaContext): Promise<GrabResult> {
         return { ok: false, needsConfig: app };
     }
     try {
-        const { added } = await resolveAndAdd(appCfg, media.mediaType, media);
-        const entry: HistoryEntry = {
-            key: `${app}:${added.id}`,
-            app,
-            arrId: added.id,
-            title: added.title,
-            year: added.year ?? media.year,
-            posterUrl: added.posterUrl,
-            site: media.site,
-            mediaType: media.mediaType,
-            addedAt: Date.now(),
-            status: 'added',
-        };
+        const { added, key } = await resolveAndAdd(appCfg, media.mediaType, media, config.tmdbApiKey);
+        const entry = buildEntry(key, app, added, media);
         await addHistoryEntry(entry);
         return { ok: true, entry };
     } catch (e) {
         return { ok: false, error: (e as Error).message };
     }
+}
+
+/** Build a history entry keyed by the canonical id (not the mutable *arr id). */
+function buildEntry(
+    key: string,
+    app: AppKind,
+    added: { id: number; title: string; year?: number; posterUrl?: string },
+    media: MediaContext,
+): HistoryEntry {
+    return {
+        key,
+        app,
+        arrId: added.id,
+        title: added.title,
+        year: added.year ?? media.year,
+        posterUrl: added.posterUrl,
+        site: media.site,
+        mediaType: media.mediaType,
+        addedAt: Date.now(),
+        status: 'added',
+    };
 }
 
 async function handleTestConn(url: string, apiKey: string): Promise<TestConnResult> {
