@@ -1,0 +1,24 @@
+{
+    "name": "grabbarr-extension",
+    "version": "1.0.0",
+    "description": "Grab movies and TV shows from IMDb, TMDb, Rotten Tomatoes, and Kinopoisk to Radarr/Sonarr.",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc --noEmit && vite build",
+        "preview": "vite preview",
+        "icons": "node scripts/gen-icons.mjs"
+    },
+    "devDependencies": {
+        "@crxjs/vite-plugin": "^2.0.0-beta.28",
+        "@tailwindcss/vite": "^4.0.0",
+        "@types/chrome": "^0.0.321",
+        "sharp": "^0.32.6",
+        "tailwindcss": "^4.0.0",
+        "typescript": "^5.4.0",
+        "vite": "^5.4.0"
+    },
+    "dependencies": {
+        "@medv/finder": "^4.0.2"
+    }
+}

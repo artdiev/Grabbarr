@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Grabbarr — minimal yellow "grab media into your library" mark -->
+  <rect width="128" height="128" rx="28" fill="#FACC15"/>
+  <g fill="none" stroke="#18181B" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+    <!-- down arrow: grab -->
+    <path d="M64 30 V74"/>
+    <path d="M45 55 L64 78 L83 55"/>
+    <!-- open tray: the library it drops into -->
+    <path d="M39 86 V101 H89 V86"/>
+  </g>
+</svg>
