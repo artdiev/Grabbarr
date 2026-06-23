@@ -86,6 +86,7 @@ async function handleRemove(app: AppKind, arrId: number, key: string): Promise<R
         if (app === 'radarr') await removeMovie(cfg, arrId, true);
         else await removeSeries(cfg, arrId, true);
         await removeHistoryEntry(key);
+        void broadcastRemoved(key);
         return { ok: true };
     } catch (e) {
         // If the item is already gone from *arr (e.g. a duplicate/stale history row,
@@ -93,9 +94,22 @@ async function handleRemove(app: AppKind, arrId: number, key: string): Promise<R
         // can't dangle un-deletable. Only a 404 means "not there"; other errors are real.
         if (e instanceof ArrError && e.status === 404) {
             await removeHistoryEntry(key);
+            void broadcastRemoved(key);
             return { ok: true };
         }
         return { ok: false, error: (e as Error).message };
+    }
+}
+
+/** Tell every tab's content script the item was removed, so its button refreshes. */
+async function broadcastRemoved(key: string): Promise<void> {
+    try {
+        const tabs = await chrome.tabs.query({});
+        for (const t of tabs) {
+            if (t.id != null) chrome.tabs.sendMessage(t.id, { type: 'ITEM_REMOVED', key }).catch(() => {});
+        }
+    } catch {
+        // No tabs permission / no content scripts — the page refreshes on next load.
     }
 }
 

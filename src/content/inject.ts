@@ -4,7 +4,7 @@
 // width and slides its content left/right on state changes (toggle illusion).
 
 import { checkSvg, spinnerSvg, trashSvg } from '../shared/icons';
-import { sendMessage } from '../shared/messages';
+import { sendMessage, TabMessage } from '../shared/messages';
 import { STATUS_META } from '../shared/status-ui';
 import { APP_FOR, AppKind, ItemStatus, MediaContext, REMOVE_CLICKS, SeasonInfo } from '../shared/types';
 import { toggleSeasonMenu } from './season-menu';
@@ -13,6 +13,16 @@ const BUTTON_ID = 'grabbarr-button';
 
 /** Where the button sits relative to the anchor: after it, or appended inside it. */
 export type AnchorPlacement = 'after' | 'append';
+
+// The currently-injected button's identity + reset hook. A background ITEM_REMOVED
+// broadcast (e.g. the item was deleted from the popup) refreshes the page button.
+let activeButton: { presentKey: () => string | undefined; reset: () => void } | null = null;
+
+chrome.runtime.onMessage.addListener((msg: TabMessage) => {
+    if (msg.type === 'ITEM_REMOVED' && activeButton && activeButton.presentKey() === msg.key) {
+        activeButton.reset();
+    }
+});
 
 // The button intentionally shows friendlier text than the popup for a few
 // statuses ('added' is handled separately via `labelFor`). Everything else falls
@@ -345,6 +355,15 @@ export function injectButton(
 
     if (placement === 'append') anchor.appendChild(host);
     else anchor.insertAdjacentElement('afterend', host);
+
+    // Register this button so a removal elsewhere (popup / another tab) resets it.
+    activeButton = {
+        presentKey: () => present?.key,
+        reset: () => {
+            tvSeasons = tvSeasons.map((s) => ({ ...s, monitored: false, episodeFileCount: 0 }));
+            toIdle(-1);
+        },
+    };
 
     // Movies pin a text-fit width; TV uses the fixed overlay-matching width (CSS).
     lockSize(btn, appName, media.mediaType !== 'tv');

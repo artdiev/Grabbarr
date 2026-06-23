@@ -127,13 +127,21 @@ export interface ActivatePickerMessage {
     type: 'ACTIVATE_PICKER';
 }
 
-export type TabMessage = GetPageStateMessage | ActivatePickerMessage;
+/** Background → all tabs: an item was removed; the page button should refresh. */
+export interface ItemRemovedMessage {
+    type: 'ITEM_REMOVED';
+    key: string; // canonical history key of the removed item
+}
+
+export type TabMessage = GetPageStateMessage | ActivatePickerMessage | ItemRemovedMessage;
 
 export type TabResultFor<M extends TabMessage> = M extends GetPageStateMessage
     ? PageState
     : M extends ActivatePickerMessage
       ? { ok: boolean }
-      : never;
+      : M extends ItemRemovedMessage
+        ? void
+        : never;
 
 export function sendToTab<M extends TabMessage>(tabId: number, msg: M): Promise<TabResultFor<M>> {
     return chrome.tabs.sendMessage(tabId, msg) as Promise<TabResultFor<M>>;
