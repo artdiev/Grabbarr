@@ -12,6 +12,8 @@ export interface SeasonMenuOpts {
     title: string;
     seasons: () => SeasonInfo[]; // latest season state (re-read after each request)
     present: () => boolean; // whether the series is in the library (shows Remove)
+    /** Fetch the freshest season list on open (resolves once `seasons()` is current). */
+    load: () => Promise<void>;
     onRequest: (season: number | 'all') => Promise<RequestSeasonResult>;
     onRemove: () => Promise<RemoveResult>;
 }
@@ -44,6 +46,8 @@ function open(opts: SeasonMenuOpts): void {
     const container = opts.button.parentElement!; // .gb-wrap (position:relative)
     const host = (opts.button.getRootNode() as ShadowRoot).host;
     const menu = el('div', { class: 'gb-menu' });
+    let loading = false;
+    let closed = false;
 
     const onDoc = (e: Event) => {
         // Clicks on the button/menu (inside our host) are handled internally.
@@ -54,6 +58,7 @@ function open(opts: SeasonMenuOpts): void {
         if (e.key === 'Escape') close();
     };
     const close = () => {
+        closed = true;
         menu.remove();
         document.removeEventListener('click', onDoc, true);
         document.removeEventListener('keydown', onKey, true);
@@ -92,7 +97,18 @@ function open(opts: SeasonMenuOpts): void {
     const render = (): void => {
         const list = el('div', { class: 'gb-menu-list' });
         list.append(requestRow('All seasons', 'Request', 'all'));
-        for (const s of opts.seasons()) {
+        const seasons = opts.seasons();
+        if (seasons.length === 0 && loading) {
+            list.append(
+                el(
+                    'div',
+                    { class: 'gb-menu-row' },
+                    spinnerSvg(14),
+                    el('span', { class: 'gb-menu-label', text: 'Loading seasons…' }),
+                ),
+            );
+        }
+        for (const s of seasons) {
             const label = seasonLabel(s.seasonNumber);
             if (s.monitored) {
                 const have = s.episodeFileCount;
@@ -149,9 +165,15 @@ function open(opts: SeasonMenuOpts): void {
         return el('div', { class: 'gb-menu-foot' }, btn);
     };
 
+    loading = true; // fetch fresh seasons on open (initial CHECK_STATUS may not have landed)
     render();
     container.append(menu);
     active = { close };
     document.addEventListener('click', onDoc, true);
     document.addEventListener('keydown', onKey, true);
+
+    void opts.load().finally(() => {
+        loading = false;
+        if (!closed) render();
+    });
 }

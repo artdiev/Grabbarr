@@ -276,6 +276,14 @@ export function injectButton(
                 title: media.title,
                 seasons: () => tvSeasons,
                 present: () => !!present,
+                load: async () => {
+                    const res = await sendMessage({ type: 'CHECK_STATUS', media });
+                    if (res.seasons) tvSeasons = res.seasons;
+                    // Capture identity if the initial reflect hadn't resolved yet.
+                    if (!present && res.present && res.status && res.arrId && res.key) {
+                        markPresent(res.status, APP_FOR[media.mediaType], res.arrId, res.key, 1);
+                    }
+                },
                 onRequest: async (season) => {
                     const res = await sendMessage({ type: 'REQUEST_SEASON', media, arrId: present?.arrId, season });
                     if (res.ok && res.entry) {
