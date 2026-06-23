@@ -1,8 +1,30 @@
 {
     "name": "grabbarr-extension",
     "version": "1.0.0",
-    "description": "Grab movies and TV shows from IMDb, TMDb, Rotten Tomatoes, and Kinopoisk to Radarr/Sonarr.",
+    "description": "Chromium extension to grab movies and TV shows from IMDb, TMDb, Rotten Tomatoes, and Kinopoisk into Radarr/Sonarr.",
+    "private": true,
     "type": "module",
+    "license": "MIT",
+    "author": "artdiev",
+    "homepage": "https://github.com/artdiev/grabbarr#readme",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/artdiev/grabbarr.git"
+    },
+    "bugs": {
+        "url": "https://github.com/artdiev/grabbarr/issues"
+    },
+    "keywords": [
+        "chrome-extension",
+        "browser-extension",
+        "manifest-v3",
+        "radarr",
+        "sonarr",
+        "imdb",
+        "tmdb",
+        "rotten-tomatoes",
+        "kinopoisk"
+    ],
     "scripts": {
         "dev": "vite",
         "build": "tsc --noEmit && vite build",
