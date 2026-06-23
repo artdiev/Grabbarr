@@ -5,6 +5,7 @@
 
 import { checkSvg, spinnerSvg, trashSvg } from '../shared/icons';
 import { sendMessage } from '../shared/messages';
+import { STATUS_META } from '../shared/status-ui';
 import { APP_FOR, AppKind, ItemStatus, MediaContext, REMOVE_CLICKS } from '../shared/types';
 
 const BUTTON_ID = 'grabbarr-button';
@@ -12,15 +13,16 @@ const BUTTON_ID = 'grabbarr-button';
 /** Where the button sits relative to the anchor: after it, or appended inside it. */
 export type AnchorPlacement = 'after' | 'append';
 
-const STATUS_LABEL: Record<ItemStatus, string> = {
-    added: 'Added',
-    queued: 'Queued',
-    downloading: 'Downloading',
-    partial: 'Partial',
-    downloaded: 'Downloaded',
+// The button intentionally shows friendlier text than the popup for a few
+// statuses ('added' is handled separately via `labelFor`). Everything else falls
+// back to the shared STATUS_META labels so there's a single source of truth.
+const STATUS_LABEL_OVERRIDE: Partial<Record<ItemStatus, string>> = {
     missing: 'In library',
     error: 'In library',
 };
+
+const statusLabel = (status: ItemStatus): string =>
+    STATUS_LABEL_OVERRIDE[status] ?? STATUS_META[status].label;
 
 function dataStateFor(status: ItemStatus): string {
     if (status === 'downloading' || status === 'queued') return 'downloading';
@@ -137,7 +139,7 @@ export function injectButton(
     };
 
     // 'added' has no download info yet, so show where it lives ("In Radarr"/"In Sonarr").
-    const labelFor = (status: ItemStatus) => (status === 'added' ? `In ${appName}` : STATUS_LABEL[status]);
+    const labelFor = (status: ItemStatus) => (status === 'added' ? `In ${appName}` : statusLabel(status));
 
     const showPresent = (dir = 1) => {
         if (!present) return;
@@ -273,17 +275,31 @@ function lockSize(btn: HTMLButtonElement, appName: string): void {
         'Failed',
         'Remove',
         'Confirm?',
-        ...Object.values(STATUS_LABEL),
+        ...(Object.keys(STATUS_META) as ItemStatus[]).map(statusLabel),
     ];
-    let maxW = 0;
-    for (const text of candidates) {
-        label.textContent = text;
-        maxW = Math.max(maxW, btn.offsetWidth);
-    }
-    label.textContent = original;
-    btn.style.width = `${maxW}px`;
-    btn.style.height = `${btn.offsetHeight}px`;
-    btn.classList.add('gb-locked');
+
+    // If layout isn't ready yet (slotted host not projected, a display:none
+    // ancestor, etc.) offsetWidth reads 0. Pinning that would make the button
+    // permanently zero-sized, so retry on later frames and only pin once we get
+    // a positive measurement.
+    const MAX_ATTEMPTS = 30;
+    const attempt = (n: number): void => {
+        let maxW = 0;
+        for (const text of candidates) {
+            label.textContent = text;
+            maxW = Math.max(maxW, btn.offsetWidth);
+        }
+        label.textContent = original;
+        const height = btn.offsetHeight;
+        if (maxW === 0 || height === 0) {
+            if (n < MAX_ATTEMPTS) requestAnimationFrame(() => attempt(n + 1));
+            return;
+        }
+        btn.style.width = `${maxW}px`;
+        btn.style.height = `${height}px`;
+        btn.classList.add('gb-locked');
+    };
+    attempt(0);
 }
 
 async function reflectExisting(

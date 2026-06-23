@@ -43,15 +43,27 @@ async function tryInject(): Promise<boolean> {
 }
 
 // SPA-friendly: retry on a short schedule, then offer the picker if still unresolved.
+// Each run() supersedes any prior loop so only one is ever active: a generation
+// counter invalidates stale ticks, and the pending timeout is cleared outright.
+let runGeneration = 0;
+let pendingTick: ReturnType<typeof setTimeout> | null = null;
+
 function run(): void {
+    const generation = ++runGeneration;
+    if (pendingTick !== null) {
+        clearTimeout(pendingTick);
+        pendingTick = null;
+    }
     let attempts = 0;
     const maxAttempts = 20; // ~10s
     const tick = async () => {
+        if (generation !== runGeneration) return; // superseded by a newer run()
         attempts++;
         const done = await tryInject();
+        if (generation !== runGeneration) return; // navigation happened during await
         if (done) return;
         if (attempts < maxAttempts) {
-            setTimeout(tick, 500);
+            pendingTick = setTimeout(tick, 500);
         } else {
             void maybePrompt();
         }
@@ -126,17 +138,34 @@ function reinject(): void {
 
 run();
 
-// Re-run on SPA navigations (URL changes without full reload).
+// Re-run on SPA navigations (URL changes without full reload). Rather than
+// observing the whole document and diffing a URL on every mutation, hook the
+// history API (pushState/replaceState) and popstate — the only ways an SPA
+// changes location.href without a full reload.
 let lastUrl = location.href;
-new MutationObserver(() => {
-    if (location.href !== lastUrl) {
-        lastUrl = location.href;
-        promptDismissed = false;
-        document.getElementById(BUTTON_ID)?.remove();
-        document.getElementById(PROMPT_ID)?.remove();
-        run();
-    }
-}).observe(document, { subtree: true, childList: true });
+function onNavigation(): void {
+    if (location.href === lastUrl) return;
+    lastUrl = location.href;
+    promptDismissed = false;
+    document.getElementById(BUTTON_ID)?.remove();
+    document.getElementById(PROMPT_ID)?.remove();
+    run();
+}
+
+const origPushState = history.pushState.bind(history);
+history.pushState = function (this: History, ...args: Parameters<History['pushState']>) {
+    const ret = origPushState(...args);
+    onNavigation();
+    return ret;
+};
+const origReplaceState = history.replaceState.bind(history);
+history.replaceState = function (this: History, ...args: Parameters<History['replaceState']>) {
+    const ret = origReplaceState(...args);
+    onNavigation();
+    return ret;
+};
+window.addEventListener('popstate', onNavigation);
+window.addEventListener('hashchange', onNavigation);
 
 // ── Popup-directed messages ──────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg: TabMessage, _sender, sendResponse) => {

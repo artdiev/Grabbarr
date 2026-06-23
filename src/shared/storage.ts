@@ -1,7 +1,7 @@
 // Typed wrappers over chrome.storage. Config lives in `sync` (small, roams with
 // the user); history lives in `local` (can grow, bounded below).
 
-import { Config, DEFAULT_CONFIG, HistoryEntry, SiteId, SiteOverride } from './types';
+import { Config, DEFAULT_CONFIG, HistoryEntry, ItemStatus, SiteId, SiteOverride } from './types';
 
 const CONFIG_KEY = 'config';
 const HISTORY_KEY = 'history';
@@ -67,4 +67,22 @@ export async function setHistory(history: HistoryEntry[]): Promise<void> {
 export async function removeHistoryEntry(key: string): Promise<void> {
     const history = await getHistory();
     await setHistory(history.filter((e) => e.key !== key));
+}
+
+/**
+ * Atomically apply status updates by re-reading the latest history, so it never
+ * resurrects entries removed concurrently nor drops ones added concurrently.
+ * Only keys still present are touched; unknown keys are skipped.
+ */
+export async function applyStatusUpdates(statuses: Record<string, ItemStatus>): Promise<void> {
+    const history = await getHistory();
+    let changed = false;
+    for (const e of history) {
+        const next = statuses[e.key];
+        if (next && next !== e.status) {
+            e.status = next;
+            changed = true;
+        }
+    }
+    if (changed) await setHistory(history);
 }

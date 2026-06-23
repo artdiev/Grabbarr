@@ -9,16 +9,45 @@ export function lookupTerm(media: MediaContext): string {
     return media.year ? `${media.title} ${media.year}` : media.title;
 }
 
+/** Lowercase, strip diacritics and non-alphanumerics so titles compare cleanly. */
+function normalizeTitle(title: string): string {
+    return title
+        .normalize('NFKD')
+        .replace(/[̀-ͯ]/g, '') // drop combining diacritics
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '');
+}
+
+/**
+ * Dependency-free title match: equal after normalization, or one strongly
+ * contains the other (guards against subtitle/edition differences while still
+ * rejecting unrelated titles). Empty strings never match.
+ */
+function titlesMatch(a: string, b: string): boolean {
+    const na = normalizeTitle(a);
+    const nb = normalizeTitle(b);
+    if (!na || !nb) return false;
+    if (na === nb) return true;
+    const [shorter, longer] = na.length <= nb.length ? [na, nb] : [nb, na];
+    // Require the shorter title to be a meaningful prefix-ish chunk of the longer
+    // one, not a tiny incidental substring.
+    return shorter.length >= 4 && longer.startsWith(shorter);
+}
+
 /** Choose the lookup result that best matches the page. */
 function pickBest(results: LookupResult[], media: MediaContext): LookupResult | undefined {
     if (results.length === 0) return undefined;
     // When we resolved by IMDb id the first result is authoritative.
     if (media.imdbId) return results[0];
-    // Otherwise prefer an exact year match, then fall back to the top result.
+    // No id: never select on year alone. Prefer a result whose title matches.
+    const titleMatches = results.filter((r) => titlesMatch(r.title, media.title));
     if (media.year) {
-        const exact = results.find((r) => r.year === media.year);
-        if (exact) return exact;
+        // Best case: title AND year both line up.
+        const both = titleMatches.find((r) => r.year === media.year);
+        if (both) return both;
     }
+    // Fall back to the best title match, then the first result.
+    if (titleMatches.length > 0) return titleMatches[0];
     return results[0];
 }
 
@@ -52,5 +81,10 @@ export async function findExisting(
     const results = mediaType === 'movie' ? await lookupMovie(cfg, term) : await lookupSeries(cfg, term);
     const best = pickBest(results, media);
     const id = typeof best?.id === 'number' ? best.id : 0;
-    return id > 0 ? id : null;
+    if (id <= 0) return null;
+    // Resolving by IMDb id is authoritative; otherwise the matched title must
+    // reasonably equal the page title so CHECK_STATUS can't flag an unrelated
+    // already-added item as present (which a two-click Remove would then delete).
+    if (!media.imdbId && best && !titlesMatch(best.title, media.title)) return null;
+    return id;
 }

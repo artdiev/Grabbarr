@@ -158,12 +158,50 @@ function saveBar(): HTMLElement {
         type: 'button',
         text: 'Save settings',
         onClick: async () => {
+            // For every configured app, make sure its origin is granted and its
+            // quality-profile / root-folder are populated before persisting —
+            // otherwise grabs later POST bogus hardcoded defaults and fail.
+            for (const { app } of APPS) {
+                const { url, apiKey } = config[app];
+                if (!url || !apiKey) continue; // blank apps are allowed
+
+                const granted = await ensureOriginPermission(url);
+                if (!granted) {
+                    conn[app] = { ok: false, msg: 'Permission denied for that URL' };
+                    render();
+                    return;
+                }
+                if (config[app].qualityProfileId == null || config[app].rootFolderPath == null) {
+                    const ok = await connectAndPopulate(app, url, apiKey);
+                    render();
+                    if (!ok) return; // don't silently persist incomplete config
+                }
+            }
             await setConfig(config);
             msg.textContent = 'Saved!';
             setTimeout(() => (msg.textContent = ''), 2000);
         },
     });
     return el('div', { class: 'flex items-center gap-3 pt-2' }, btn, msg);
+}
+
+/**
+ * Connect to an app's *arr server, store its `choices`, and default any missing
+ * quality-profile / root-folder selection to the first option. Sets `conn[app]`
+ * accordingly. Returns true only when the connection succeeded.
+ */
+async function connectAndPopulate(app: AppKind, url: string, apiKey: string): Promise<boolean> {
+    const res = await sendMessage({ type: 'TEST_CONN', app, url, apiKey });
+    if (res.ok && res.choices) {
+        choices[app] = res.choices;
+        conn[app] = { ok: true, msg: `Connected${res.version ? ` (v${res.version})` : ''}` };
+        // Default selections to the first option when none chosen yet.
+        config[app].qualityProfileId ??= res.choices.qualityProfiles[0]?.id;
+        config[app].rootFolderPath ??= res.choices.rootFolders[0]?.path;
+        return true;
+    }
+    conn[app] = { ok: false, msg: res.error ?? 'Connection failed' };
+    return false;
 }
 
 async function testConnection(app: AppKind): Promise<void> {
@@ -179,16 +217,7 @@ async function testConnection(app: AppKind): Promise<void> {
         conn[app] = { ok: false, msg: 'Permission denied for that URL' };
         return render();
     }
-    const res = await sendMessage({ type: 'TEST_CONN', app, url, apiKey });
-    if (res.ok && res.choices) {
-        choices[app] = res.choices;
-        conn[app] = { ok: true, msg: `Connected${res.version ? ` (v${res.version})` : ''}` };
-        // Default selections to the first option when none chosen yet.
-        config[app].qualityProfileId ??= res.choices.qualityProfiles[0]?.id;
-        config[app].rootFolderPath ??= res.choices.rootFolders[0]?.path;
-    } else {
-        conn[app] = { ok: false, msg: res.error ?? 'Connection failed' };
-    }
+    await connectAndPopulate(app, url, apiKey);
     render();
 }
 

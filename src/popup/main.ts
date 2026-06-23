@@ -1,7 +1,7 @@
 import '../styles.css';
 import { trashSvg } from '../shared/icons';
 import { PageState, sendMessage, sendToTab } from '../shared/messages';
-import { getHistory, setHistory } from '../shared/storage';
+import { applyStatusUpdates, getHistory } from '../shared/storage';
 import { clear, el } from '../shared/dom';
 import { STATUS_META } from '../shared/status-ui';
 import { HistoryEntry, ItemStatus, REMOVE_CLICKS, SITES } from '../shared/types';
@@ -206,6 +206,16 @@ function render(history: HistoryEntry[]): void {
     root.append(list);
 }
 
+/**
+ * Reconcile a recomputed status against the current one. A recently added item
+ * (current status 'added') with no file yet hasn't failed, so never downgrade it
+ * to 'missing' — keep 'added' until it actually advances.
+ */
+function reconcileStatus(current: ItemStatus, next: ItemStatus): ItemStatus {
+    if (current === 'added' && next === 'missing') return 'added';
+    return next;
+}
+
 async function refresh(): Promise<void> {
     const history = await getHistory();
     if (history.length === 0) return;
@@ -213,17 +223,17 @@ async function refresh(): Promise<void> {
         type: 'REFRESH_STATUS',
         entries: history.map((e) => ({ key: e.key, app: e.app, arrId: e.arrId })),
     });
-    let changed = false;
+    const updates: Record<string, ItemStatus> = {};
     for (const e of history) {
-        const next = res.statuses[e.key];
-        if (next && next !== e.status) {
-            e.status = next;
-            changed = true;
-            const tag = root.querySelector(`li[data-key="${CSS.escape(e.key)}"] .status-tag`);
-            tag?.replaceWith(statusTag(next));
-        }
+        const raw = res.statuses[e.key];
+        if (!raw) continue;
+        const next = reconcileStatus(e.status, raw);
+        if (next === e.status) continue;
+        updates[e.key] = next;
+        const tag = root.querySelector(`li[data-key="${CSS.escape(e.key)}"] .status-tag`);
+        tag?.replaceWith(statusTag(next));
     }
-    if (changed) await setHistory(history);
+    if (Object.keys(updates).length > 0) await applyStatusUpdates(updates);
 }
 
 /** Footer that launches the element picker on the active tab (supported pages only). */

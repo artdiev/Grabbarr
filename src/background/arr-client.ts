@@ -130,6 +130,9 @@ export async function addMovie(cfg: AppConfig, lookup: LookupResult): Promise<Ad
         method: 'POST',
         body: JSON.stringify({
             ...lookup,
+            // `lookup` may carry a nonzero library id (item already added); an add
+            // must always be a new add, so force id to 0 or Radarr rejects it (HTTP 400).
+            id: 0,
             qualityProfileId: cfg.qualityProfileId ?? 1,
             rootFolderPath: cfg.rootFolderPath ?? '/movies',
             monitored: true,
@@ -145,6 +148,9 @@ export async function addSeries(cfg: AppConfig, lookup: LookupResult): Promise<A
         method: 'POST',
         body: JSON.stringify({
             ...lookup,
+            // `lookup` may carry a nonzero library id (item already added); an add
+            // must always be a new add, so force id to 0 or Sonarr rejects it (HTTP 400).
+            id: 0,
             qualityProfileId: cfg.qualityProfileId ?? 1,
             rootFolderPath: cfg.rootFolderPath ?? '/tv',
             monitored: true,
