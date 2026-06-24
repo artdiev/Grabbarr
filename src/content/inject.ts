@@ -50,15 +50,15 @@ function grabIcon(): HTMLImageElement {
 // All button styling lives in the Shadow DOM, fully isolated from the host page.
 const BUTTON_CSS = `
 :host{all:initial}
-.gb{display:inline-flex;align-items:center;justify-content:center;gap:9px;margin:0;
-  padding:6px 15px;border:0;border-radius:12px;cursor:pointer;position:relative;overflow:hidden;
-  font:600 20px/1 ui-sans-serif,system-ui,sans-serif;color:#fff;background:#4f46e5;
+.gb{display:inline-flex;align-items:center;justify-content:center;gap:9px;margin:0;box-sizing:border-box;
+  padding:6px 15px;border:1px solid rgba(255,255,255,.14);border-radius:12px;cursor:pointer;position:relative;overflow:hidden;
+  font:600 20px/1 ui-sans-serif,system-ui,sans-serif;color:#fff;background:#0f1115;
   box-shadow:0 1px 2px rgba(0,0,0,.25);transition:opacity .15s,background .15s}
 .gb .grabbarr-inner{display:inline-flex;align-items:center;gap:9px;white-space:nowrap}
 .gb.gb-locked .grabbarr-inner{position:absolute;inset:0;justify-content:center}
 .gb img,.gb svg{width:24px;height:24px;display:block}
 .gb .gb-spin{transform-origin:center;animation:gb-spin .7s linear infinite}
-.gb:hover{background:#4338ca}
+.gb:hover{background:#1c2128}
 .gb[data-state="busy"]{cursor:default}
 .gb[data-state="grabbed"]{background:#fff;color:#0f1115;cursor:default;
   box-shadow:0 1px 2px rgba(0,0,0,.25),inset 0 0 0 1px rgba(0,0,0,.08)}
