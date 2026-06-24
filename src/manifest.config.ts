@@ -2,14 +2,24 @@ import { defineManifest } from '@crxjs/vite-plugin';
 
 // Hosts whose pages get the content script injected. Adding a site means adding
 // an adapter (src/content/adapters) AND a matching entry here.
+// Both `www.` and bare-domain variants: sites redirect between them (e.g. RT
+// rottentomatoes.com → www.rottentomatoes.com), and matching only `www.` can miss
+// the initial document so the content script never injects.
 const SITE_MATCHES = [
     'https://www.imdb.com/title/*',
+    'https://imdb.com/title/*',
     'https://www.themoviedb.org/movie/*',
     'https://www.themoviedb.org/tv/*',
+    'https://themoviedb.org/movie/*',
+    'https://themoviedb.org/tv/*',
     'https://www.rottentomatoes.com/m/*',
     'https://www.rottentomatoes.com/tv/*',
+    'https://rottentomatoes.com/m/*',
+    'https://rottentomatoes.com/tv/*',
     'https://www.kinopoisk.ru/film/*',
     'https://www.kinopoisk.ru/series/*',
+    'https://kinopoisk.ru/film/*',
+    'https://kinopoisk.ru/series/*',
 ];
 
 // Distinct origins for the supported sites (deduped — Chromium/Edge reject a
