@@ -3,7 +3,7 @@
 A Chromium extension that adds a **Grab** button to movie and TV pages on IMDb,
 TMDb, Rotten Tomatoes, and Kinopoisk. One click sends the title to your
 self-hosted [Radarr](https://radarr.video/) (movies) or
-[Sonarr](https://sonarr.tv/) (TV) instance — and one more removes it again.
+[Sonarr](https://sonarr.tv/) (TV) instance.
 
 ![Grabbarr showcase](./img/showcase.png)
 
