@@ -5,6 +5,8 @@ TMDb, Rotten Tomatoes, and Kinopoisk. One click sends the title to your
 self-hosted [Radarr](https://radarr.video/) (movies) or
 [Sonarr](https://sonarr.tv/) (TV) instance — and one more removes it again.
 
+![Grabbarr showcase](./img/showcase.png)
+
 ## Features
 
 - **Grab button** injected on supported media pages; movies go to Radarr, TV to Sonarr.
